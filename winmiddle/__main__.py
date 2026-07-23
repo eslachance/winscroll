@@ -13,10 +13,10 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
 from winmiddle.config import defaultConfigText, loadConfig
+from winmiddle.cursor import CursorController
 from winmiddle.daemon import MiddleDaemon
 from winmiddle.devices import listPointerDevices
 from winmiddle.focus import FocusHub, registerFocusHub
-from winmiddle.overlay import AutoscrollOverlay, OverlayController
 
 
 def buildParser() -> argparse.ArgumentParser:
@@ -28,7 +28,7 @@ def buildParser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="count", default=0)
     parser.add_argument("--list-devices", action="store_true", help="List middle-button pointers and exit")
     parser.add_argument("--write-config", action="store_true", help="Write default config to ~/.config/winmiddle/config.toml")
-    parser.add_argument("--no-overlay", action="store_true", help="Disable the origin glyph overlay")
+    parser.add_argument("--no-overlay", action="store_true", help="Disable the drawn autoscroll indicator")
     parser.add_argument("--no-grab", action="store_true", help="Do not exclusive-grab the physical mouse (debug)")
     return parser
 
@@ -72,14 +72,14 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("winmiddle")
+    # Matches NoDisplay desktop entry so Plasma can skip taskbar chrome.
+    app.setDesktopFileName("winmiddle-overlay")
 
     focusHub = FocusHub()
     registerFocusHub(focusHub)
 
-    overlayController = None
-    if config.showOverlay:
-        overlay = AutoscrollOverlay()
-        overlayController = OverlayController(overlay)
+    # Drawn LayerShell indicator (not cursor override — that steals scroll on Wayland).
+    overlayController = CursorController() if config.showOverlay else None
 
     daemon = MiddleDaemon(config, focusHub, overlayController)
     thread = threading.Thread(target=daemon.run, name="winmiddle-input", daemon=True)
@@ -87,13 +87,11 @@ def main(argv: list[str] | None = None) -> int:
 
     def shutdown(*_args) -> None:
         daemon.stop()
-        # Give the input thread a moment, then quit Qt
         QTimer.singleShot(200, app.quit)
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    # Watchdog: if input thread dies, exit
     def watch() -> None:
         if not thread.is_alive():
             app.quit()
