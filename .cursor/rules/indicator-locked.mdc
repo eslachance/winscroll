@@ -25,10 +25,4 @@ The autoscroll indicator + scroll path below is **working on Plasma 6 Wayland** 
 
 ## Panel / work-area note
 
-Wayland delivers wheel events only to the surface under the cursor. Hopping onto
-the client and back in one uinput batch gets coalesced, so wheels still hit the
-panel. Instead: while the *logical* pointer is outside `availableGeometry` (or
-KWin reports a dock/panel under the cursor), park the real compositor cursor on
-the autoscroll origin and keep scrolling there. Unpark when the logical pointer
-returns to the work area. Direction still uses the logical vector (no drift).
-
+Clamp **forwarded** pointer motion to `availableGeometry` during autoscroll so the cursor stays off panels. Scroll/direction vector must use that **same clamped** on-screen position (no drift). Scrolling while over the panel is a known Wayland limit — do not park/hop the cursor to work around it (triggers CachyOS cursor-size animations).
