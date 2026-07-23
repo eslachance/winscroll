@@ -1,5 +1,9 @@
 """Windows-style autoscroll origin marker (small LayerShell surface).
 
+LOCKED DESIGN — see `.cursor/rules/indicator-locked.mdc`.
+Do not replace this with fullscreen overlays or setOverrideCursor; those
+steal wheel events or fight the compositor on Wayland.
+
 Design notes (Wayland):
 - A fullscreen overlay under the pointer steals wheel events → no scroll.
 - setOverrideCursor needs pointer focus → same problem.

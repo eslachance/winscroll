@@ -1,0 +1,28 @@
+---
+description: Locked-in Wayland autoscroll indicator design — do not regress
+alwaysApply: true
+---
+
+# winmiddle indicator — LOCKED
+
+The autoscroll indicator + scroll path below is **working on Plasma 6 Wayland** (small origin glyph, smooth scroll, no taskbar entry). **Do not “improve” it by reverting to earlier approaches.**
+
+## Required design
+
+1. **Small 48×48 origin glyph only** (`winmiddle/cursor.py`), placed at the middle-click point via **LayerShell** (`Top|Left` anchors + margins).
+2. **Paint the glyph** — never `QGuiApplication.setOverrideCursor` / `changeOverrideCursor` for the indicator.
+3. **No fullscreen overlay** under the pointer. A surface under the cursor steals wheel events on Wayland.
+4. **Direction** = emphasize arms on the fixed origin glyph from the scroll vector. **No floating arrow** that follows the pointer.
+5. **Empty `QWindow` input region** (`setMask(QRegion())`) + `WindowTransparentForInput`. Never `QWidget.setMask` (clips painting).
+6. **Scroll** = daemon uinput `REL_WHEEL` / `REL_WHEEL_HI_RES` to the virtual mouse while the physical device is grabbed.
+
+## Forbidden regressions
+
+- Fullscreen click-catching carrier windows to host a custom cursor
+- Hiding/showing a surface around each wheel inject (race)
+- Relying on client-side `WA_TransparentForMouseEvents` alone for scroll pass-through under a fullscreen surface
+- Opacity fade / center→target open animations for the marker
+
+## Panel / work-area note
+
+During autoscroll, clamp **forwarded** pointer motion to the screen `availableGeometry` (excludes Plasma panels) so the compositor cursor cannot enter the panel and steal wheel focus. Keep the **unclamped** vector for scroll speed (edge-push).

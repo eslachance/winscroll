@@ -78,6 +78,13 @@ def main(argv: list[str] | None = None) -> int:
     focusHub = FocusHub()
     registerFocusHub(focusHub)
 
+    # Keep availableGeometry fresh for panel-edge pointer clamp during autoscroll.
+    workAreaTimer = QTimer()
+    workAreaTimer.setInterval(200)
+    workAreaTimer.timeout.connect(focusHub.refreshWorkArea)
+    workAreaTimer.start()
+    focusHub.refreshWorkArea()
+
     # Drawn LayerShell indicator (not cursor override — that steals scroll on Wayland).
     overlayController = CursorController() if config.showOverlay else None
 

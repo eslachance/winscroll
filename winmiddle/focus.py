@@ -22,6 +22,20 @@ class FocusState:
     resourceName: str = ""
     cursorX: int = 0
     cursorY: int = 0
+    # Screen availableGeometry (excludes panels): x, y, w, h — or None.
+    workArea: tuple[int, int, int, int] | None = None
+
+
+def _workAreaAt(cursorX: int, cursorY: int) -> tuple[int, int, int, int] | None:
+    """Qt main-thread helper: usable desktop rect under the pointer."""
+    from PyQt6.QtCore import QPoint
+    from PyQt6.QtGui import QGuiApplication
+
+    screen = QGuiApplication.screenAt(QPoint(cursorX, cursorY)) or QGuiApplication.primaryScreen()
+    if screen is None:
+        return None
+    geo = screen.availableGeometry()
+    return (geo.x(), geo.y(), geo.width(), geo.height())
 
 
 class FocusHub(QObject):
@@ -39,16 +53,29 @@ class FocusHub(QObject):
                 resourceName=self._state.resourceName,
                 cursorX=self._state.cursorX,
                 cursorY=self._state.cursorY,
+                workArea=self._state.workArea,
             )
+
+    def refreshWorkArea(self) -> None:
+        """Periodic Qt-thread refresh so panel clamp works even if focus script lags."""
+        with self._lock:
+            cx, cy = self._state.cursorX, self._state.cursorY
+        wa = _workAreaAt(cx, cy)
+        if wa is None:
+            return
+        with self._lock:
+            self._state.workArea = wa
 
     @pyqtSlot(str, str, int, int)
     def Update(self, resourceClass: str, resourceName: str, cursorX: int, cursorY: int) -> None:
+        wa = _workAreaAt(int(cursorX), int(cursorY))
         with self._lock:
             self._state = FocusState(
                 resourceClass=(resourceClass or "").lower(),
                 resourceName=(resourceName or "").lower(),
                 cursorX=int(cursorX),
                 cursorY=int(cursorY),
+                workArea=wa,
             )
 
 

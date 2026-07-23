@@ -55,6 +55,9 @@ class MiddleDaemon:
         self._lastScrollTs = 0.0
         self._autoscrollOriginScreen = (0, 0)
         self._autoscrollEnterTs = 0.0
+        # Compositor cursor estimate during autoscroll (clamped to work area).
+        self._pointerScreenX = 0.0
+        self._pointerScreenY = 0.0
         self.ui: UInput | None = None
         self.pointer = None
 
@@ -81,6 +84,8 @@ class MiddleDaemon:
     def _enterAutoscroll(self) -> None:
         focus = self.focusHub.snapshot()
         self._autoscrollOriginScreen = (focus.cursorX, focus.cursorY)
+        self._pointerScreenX = float(focus.cursorX)
+        self._pointerScreenY = float(focus.cursorY)
         # Keep tracking from current relative origin (zeros).
         self._originX = self._cursorX
         self._originY = self._cursorY
@@ -98,6 +103,38 @@ class MiddleDaemon:
         )
         if self.overlay:
             self.overlay.requestShow(focus.cursorX, focus.cursorY)
+
+    def _forwardAutoscrollMotion(self, ui: UInput, code: int, value: int) -> None:
+        """Forward pointer motion, clamped to availableGeometry (excludes panels).
+
+        Scroll speed still uses the unclamped _cursorX/_cursorY vector so pushing
+        against the panel edge keeps accelerating scroll (Windows-like).
+        """
+        focus = self.focusHub.snapshot()
+        workArea = focus.workArea
+        if workArea is None:
+            injectRelative(ui, code, value)
+            syn(ui)
+            return
+
+        x0, y0, width, height = workArea
+        x1 = x0 + max(1, width) - 1
+        y1 = y0 + max(1, height) - 1
+
+        if code == ecodes.REL_X:
+            newPos = self._pointerScreenX + value
+            clamped = min(max(newPos, float(x0)), float(x1))
+            deliver = int(round(clamped - self._pointerScreenX))
+            self._pointerScreenX = clamped
+        else:
+            newPos = self._pointerScreenY + value
+            clamped = min(max(newPos, float(y0)), float(y1))
+            deliver = int(round(clamped - self._pointerScreenY))
+            self._pointerScreenY = clamped
+
+        if deliver:
+            injectRelative(ui, code, deliver)
+            syn(ui)
 
     def _leaveAutoscroll(self) -> None:
         if self.mode == Mode.AUTOSCROLL:
@@ -181,8 +218,7 @@ class MiddleDaemon:
                 self._leaveAutoscroll()
                 return
             if etype == ecodes.EV_REL and code in (ecodes.REL_X, ecodes.REL_Y):
-                forwardEvent(ui, event)
-                syn(ui)
+                self._forwardAutoscrollMotion(ui, code, value)
                 return
             if self._isWheelEvent(etype, code):
                 ageMs = (time.monotonic() - self._autoscrollEnterTs) * 1000.0
