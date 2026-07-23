@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=winmiddle
-Exec=/home/eslachance/.local/bin/winmiddle
+Exec=winmiddle
 NoDisplay=true
 Hidden=true
 StartupNotify=false

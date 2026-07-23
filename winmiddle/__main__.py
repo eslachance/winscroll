@@ -12,12 +12,13 @@ from pathlib import Path
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
-from winmiddle.config import defaultConfigText, loadConfig
+from winmiddle.config import loadConfig
 from winmiddle.cursor import CursorController
 from winmiddle.daemon import MiddleDaemon
 from winmiddle.devices import listPointerDevices
 from winmiddle.focus import FocusHub, registerFocusHub
 from winmiddle.scrollprobe import ScrollProbe
+from winmiddle.setuputil import ensureConfig, runSetup
 
 
 def buildParser() -> argparse.ArgumentParser:
@@ -29,6 +30,13 @@ def buildParser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="count", default=0)
     parser.add_argument("--list-devices", action="store_true", help="List middle-button pointers and exit")
     parser.add_argument("--write-config", action="store_true", help="Write default config to ~/.config/winmiddle/config.toml")
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="First-time setup: config, paste-kill, KWin script, mouse udev, enable user service",
+    )
+    parser.add_argument("--skip-udev", action="store_true", help="With --setup, skip mouse udev rule")
+    parser.add_argument("--skip-service", action="store_true", help="With --setup, skip enabling the user service")
     parser.add_argument("--no-overlay", action="store_true", help="Disable the drawn autoscroll indicator")
     parser.add_argument("--no-grab", action="store_true", help="Do not exclusive-grab the physical mouse (debug)")
     return parser
@@ -56,13 +64,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.write_config:
         target = Path.home() / ".config" / "winmiddle" / "config.toml"
-        target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             print(f"Already exists: {target}", file=sys.stderr)
             return 1
-        target.write_text(defaultConfigText(), encoding="utf-8")
+        ensureConfig(target)
         print(f"Wrote {target}")
         return 0
+
+    if args.setup:
+        return runSetup(skipUdev=args.skip_udev, skipService=args.skip_service)
 
     config = loadConfig(args.config)
     if args.no_overlay:

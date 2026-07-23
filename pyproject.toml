@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "winmiddle"
+version = "0.1.0"
+description = "Windows-faithful middle-click autoscroll for Linux"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "eslachance" }]
+keywords = ["autoscroll", "middle-click", "wayland", "plasma", "evdev"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Desktop Environment",
+]
+# Runtime libs come from distro packages on Arch (python-evdev, python-pyqt6).
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/eslachance/winscroll"
+Repository = "https://github.com/eslachance/winscroll"
+Issues = "https://github.com/eslachance/winscroll/issues"
+
+[project.scripts]
+winmiddle = "winmiddle.__main__:main"
+
+[tool.hatch.build]
+exclude = [
+  "winmiddle/__pycache__",
+  "winmiddle/test_*.py",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/winmiddle",
+  "/kwin-script",
+  "/systemd",
+  "/share",
+  "/packaging",
+  "/LICENSE",
+  "/README.md",
+  "/pyproject.toml",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["winmiddle"]

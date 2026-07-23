@@ -134,6 +134,25 @@ def iterDeviceEvents(
         yield batch
 
 
+def iterDeviceEventsWithExtras(
+    device: InputDevice,
+    extraFds: list[int],
+    timeoutSec: float = 0.01,
+) -> Iterator[tuple[list[InputEvent], list[int]]]:
+    """Yield (mouse_batch, ready_extra_fds) multiplexed with select."""
+    watch = [device.fd, *extraFds]
+    while True:
+        ready, _, _ = select.select(watch, [], [], timeoutSec)
+        if not ready:
+            yield [], []
+            continue
+        mouseBatch: list[InputEvent] = []
+        if device.fd in ready:
+            mouseBatch = list(device.read())
+        extras = [fd for fd in ready if fd != device.fd]
+        yield mouseBatch, extras
+
+
 def forwardEvent(ui: UInput, event: InputEvent) -> None:
     ui.write(event.type, event.code, event.value)
 

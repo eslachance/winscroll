@@ -1,0 +1,12 @@
+# Build / packaging artifacts
+.venv-build/
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+*.tar.gz
+*.tar.zst
+packaging/aur/*/*.pkg.tar*
+packaging/aur/*/pkg/
+packaging/aur/*/src/

@@ -9,9 +9,10 @@ from enum import Enum, auto
 
 class Mode(Enum):
     IDLE = auto()
-    PENDING_MIDDLE = auto()  # middle down; deciding click vs drag
+    PENDING_MIDDLE = auto()  # middle down; deciding tap vs hold-scroll vs toggle vs drag
     MIDDLE_DRAG = auto()  # passthrough middle-drag (Blender, CAD, etc.)
-    AUTOSCROLL = auto()  # Windows click-to-autoscroll active
+    AUTOSCROLL = auto()  # toggle mode: click to enter, click to exit
+    HOLD_AUTOSCROLL = auto()  # hold mode: scroll while middle is held
 
 
 @dataclass

@@ -1,40 +1,70 @@
 # winmiddle
 
-**Windows-faithful middle-click autoscroll for Linux** — built for people who are done with highlight-paste and hold-to-scroll half-measures.
+**Windows-faithful middle-click autoscroll for Linux** — hold-to-scroll by default, with optional Windows click-to-toggle and modifier gates.
 
-On Windows, middle-click means:
+Primary target: **KDE Plasma (Wayland) on Arch-based distros** (Arch, CachyOS, EndeavourOS, …). The daemon can run elsewhere; overlay placement and per-app filters work best with the bundled KWin script.
 
-1. **Click once** → enter autoscroll (origin glyph appears)
-2. **Move** away from the origin → scroll; speed scales with distance
-3. **Click again** → exit
-4. **Never** paste whatever you highlighted three windows ago
-5. In browsers: middle-click **links/tabs** still do link/tab things (app hit-testing)
+## Install
 
-That is what this project targets on Linux (especially **KDE Plasma Wayland** / CachyOS).
+### AUR (recommended)
+
+```bash
+# Release package
+paru -S winmiddle
+# or: yay -S winmiddle
+
+# Tracking git main
+paru -S winmiddle-git
+```
+
+Then finish session setup once:
+
+```bash
+winmiddle --setup
+```
+
+Log out and back in once (KWin only reapplies primary-selection on session start).
+
+### From source
+
+```bash
+git clone https://github.com/eslachance/winscroll.git
+cd winscroll
+./install.sh
+```
+
+Uninstall from-source installs with `./uninstall.sh`. Packaged installs: `sudo pacman -R winmiddle` (or `winmiddle-git`).
+
+## Activation (config)
+
+```toml
+[activation]
+hold = true              # hold middle + move → scroll; release → stop; tap → native middle-click
+toggle = false           # Windows click-to-toggle (click enter, click exit)
+modifier = "none"        # none | ctrl | alt | shift | super
+modifier_for = "both"    # which gestures need the modifier: toggle | hold | both
+```
+
+Examples:
+- **Default (recommended):** hold only — tap closes tabs; hold+move scrolls.
+- **Classic Windows:** `hold = false`, `toggle = true`
+- **Ctrl+middle hold to scroll:** `hold = true`, `modifier = "ctrl"`, `modifier_for = "hold"`
 
 ## Architecture
 
 ```
 Physical mouse ──grab──► winmiddled ──uinput──► virtual mouse ──► KWin/apps
                               │
-                              ├─ click (no drag) → AUTOSCROLL + overlay
-                              ├─ drag past threshold → middle-drag passthrough
+                              ├─ hold+move → HOLD_AUTOSCROLL (default)
+                              ├─ tap (toggle on) → AUTOSCROLL + overlay
+                              ├─ drag when hold gated off → middle-drag passthrough
                               └─ focused Firefox/Chrome → full middle passthrough
-                                                          (native Windows behavior)
 
 KWin script ──DBus──► focus + cursor position (for overlay + app filters)
 Paste-kill: KDE EnablePrimarySelection=false, GTK, Firefox prefs, Chrome flag
 ```
 
-Hold-to-scroll tools (X11 `Evdev Wheel Emulation`, KDE “press middle to scroll”, Wayland-Wheeltani) are **not** Windows. This daemon implements the **click-to-autoscroll** state machine.
-
-## Install (CachyOS / Arch / Plasma)
-
-```bash
-./install.sh
-```
-
-Then **log out and back in** once (KWin only reapplies primary-selection on session start).
+## Status / tuning
 
 ```bash
 systemctl --user status winmiddle
@@ -44,32 +74,30 @@ winmiddle --list-devices
 
 Config: `~/.config/winmiddle/config.toml`
 
-Uninstall: `./uninstall.sh`
-
-## Requirements
-
-- Python 3.11+ with `python-evdev` and `python-pyqt6`
-- Permission to read your mouse + `/dev/uinput` (install.sh writes a udev `uaccess` rule)
-- KDE Plasma recommended (ships a KWin script for focus/cursor). Other DEs: daemon still autoscrolls, but overlay position / per-app filters degrade without a focus provider.
-
-## Tuning
-
 ```toml
 [scroll]
-drag_threshold_px = 6   # held move beyond this → Blender-style middle-drag
-deadzone_px = 8
-gain = 0.045
-exponent = 1.35
+drag_threshold_px = 50  # held move beyond this → hold-scroll (or Blender-style drag if hold off)
+deadzone_px = 12
 
 [apps]
 native_middle = ["firefox", "google-chrome", ...]  # real Windows middle-click
 passthrough = ["steam_app", "blender", ...]        # never intercept
+require_scrollable = true                          # AT-SPI gate
 ```
+
+## Requirements
+
+- Python 3.11+ with `python-evdev` and `python-pyqt6`
+- `layer-shell-qt` (origin glyph on Wayland)
+- Permission to read your mouse + `/dev/uinput` (`winmiddle --setup` writes a mouse `uaccess` rule; the package ships a generic uinput rule)
+- KDE Plasma recommended (ships a KWin script for focus/cursor). Other DEs: daemon still autoscrolls, but overlay position / per-app filters degrade without a focus provider.
+
+Optional: `python-gobject` + `at-spi2-core` for scrollable-under-cursor probing.
 
 ## Honest limits
 
 - **True** Windows link/tab hit-testing only exists inside apps. Browsers are passthrough + native autoscroll so that stays correct.
-- Everywhere else, winmiddle provides the Windows **autoscroll gesture** globally — which is what most “make middle click like Windows” requests actually want.
+- AT-SPI “scrollable” is best-effort; some UI (tabs, custom widgets) may still need the hold/tap split.
 - Fullscreen games should stay on the passthrough list so camera-orbit binds keep working.
 
 ## License

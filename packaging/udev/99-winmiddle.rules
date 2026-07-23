@@ -1,0 +1,5 @@
+# winmiddle — allow seated user to create the virtual pointer (uinput).
+# Mouse grab: either add your user to the `input` group, or run
+#   winmiddle --setup
+# to install a device-specific uaccess rule under /etc/udev/rules.d/.
+KERNEL=="uinput", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
+# Remove a from-source (user-local) install. Packaged installs: pacman -R winmiddle
 set -euo pipefail
 
 SITE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/winmiddle"
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 KWIN_SCRIPT_DST="${XDG_DATA_HOME:-$HOME/.local/share}/kwin/scripts/winmiddle-focus"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 
 log() { printf '==> %s\n' "$*"; }
 
@@ -21,8 +23,9 @@ if command -v kwriteconfig6 >/dev/null; then
 fi
 rm -rf "$KWIN_SCRIPT_DST"
 
-log "Removing launcher + package"
+log "Removing launcher + package + desktop entry"
 rm -f "$BIN_DIR/winmiddle"
+rm -f "$APP_DIR/winmiddle-overlay.desktop"
 rm -rf "$SITE_DIR"
 
 log "Re-enabling KDE primary selection (middle-click paste)"
@@ -31,9 +34,10 @@ if command -v kwriteconfig6 >/dev/null; then
 fi
 
 cat <<EOF
-Uninstalled winmiddle.
+Uninstalled from-source winmiddle.
 Config kept at ~/.config/winmiddle/ (remove manually if desired).
-udev rules at /etc/udev/rules.d/99-winmiddle.rules — remove with:
-  sudo rm /etc/udev/rules.d/99-winmiddle.rules && sudo udevadm control --reload-rules
+Optional mouse udev rule:
+  sudo rm -f /etc/udev/rules.d/99-winmiddle-mouse.rules
+  sudo udevadm control --reload-rules
 Log out/in for KWin primary-selection change.
 EOF

@@ -10,7 +10,7 @@
             }
         ],
         "Id": "winmiddle-focus",
-        "Version": "0.1",
+        "Version": "0.1.0",
         "License": "MIT",
         "ServiceTypes": ["KWin/Script"]
     },

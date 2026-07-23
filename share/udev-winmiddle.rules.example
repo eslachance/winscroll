@@ -1,3 +1,5 @@
-# Example udev rule — install.sh writes a concrete one for your mouse + uinput.
+# Generic rule shipped by the package (also in packaging/udev/99-winmiddle.rules):
+KERNEL=="uinput", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
+
+# Optional mouse-specific rule written by `winmiddle --setup` (example):
 # KERNEL=="event*", SUBSYSTEM=="input", ATTRS{idVendor}=="3434", ATTRS{idProduct}=="0b10", MODE="0660", TAG+="uaccess"
-# KERNEL=="uinput", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"

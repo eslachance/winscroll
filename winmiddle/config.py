@@ -103,6 +103,13 @@ class Config:
     # Only engage autoscroll when AT-SPI says the target looks scrollable.
     requireScrollable: bool = True
     scrollProbeTimeoutMs: float = 15.0
+    # Activation: hold-to-scroll (default) and/or Windows click-to-toggle.
+    toggleScroll: bool = False
+    holdScroll: bool = True
+    # none | ctrl | alt | shift | super
+    activationModifier: str = "none"
+    # Which gestures require the modifier: toggle | hold | both
+    modifierFor: str = "both"
     showOverlay: bool = True
     grabDevice: bool = True
 
@@ -154,6 +161,7 @@ def loadConfig(path: Path | None = None) -> Config:
     scroll = data.get("scroll", {})
     apps = data.get("apps", {})
     ui = data.get("ui", {})
+    activation = data.get("activation", {})
 
     if device.get("path"):
         cfg.devicePath = str(device["path"])
@@ -199,6 +207,22 @@ def loadConfig(path: Path | None = None) -> Config:
         cfg.requireScrollable = bool(apps["require_scrollable"])
     cfg.scrollProbeTimeoutMs = float(apps.get("scroll_probe_timeout_ms", cfg.scrollProbeTimeoutMs))
 
+    if "toggle" in activation:
+        cfg.toggleScroll = bool(activation["toggle"])
+    if "hold" in activation:
+        cfg.holdScroll = bool(activation["hold"])
+    if "modifier" in activation:
+        from winmiddle.modifiers import normalizeModifierName
+
+        cfg.activationModifier = normalizeModifierName(str(activation["modifier"]))
+    if "modifier_for" in activation:
+        applies = str(activation["modifier_for"]).strip().lower()
+        if applies not in {"toggle", "hold", "both"}:
+            raise ValueError("activation.modifier_for must be toggle, hold, or both")
+        cfg.modifierFor = applies
+    if not cfg.toggleScroll and not cfg.holdScroll:
+        raise ValueError("activation: enable at least one of toggle or hold")
+
     cfg.showOverlay = bool(ui.get("overlay", cfg.showOverlay))
     return cfg
 
@@ -211,34 +235,34 @@ def defaultConfigText() -> str:
 # product = 0x405e
 grab = true
 
+[activation]
+# Hold middle + move to scroll (tap = normal middle-click). Recommended default.
+hold = true
+# Windows-style click-to-toggle autoscroll (click to enter, click again to exit).
+toggle = false
+# Optional modifier gate: none | ctrl | alt | shift | super
+modifier = "none"
+# Which gestures require the modifier: toggle | hold | both
+modifier_for = "both"
+
 [scroll]
 # Speed curve: slow | normal | fast
-# Measured in wheel notches/sec — presets are deliberately far apart.
 speed = "normal"
 drag_threshold_px = 50
 click_max_ms = 350
 hz = 60
 exit_on_wheel = false
 wheel_grace_ms = 450
-# Optional fine-tuning (overrides the preset):
-# deadzone_px = 12
-# ref_distance_px = 100   # distance past deadzone where you hit ref_nps
-# ref_nps = 9             # notches per second at that distance
-# max_nps = 24
-# power = 1.35            # >1 = gradual near center, faster when far
 
 [apps]
-# Only autoscroll when AT-SPI says the click target looks scrollable.
-# Unknown (games, no a11y tree, timeout) → native middle-click passthrough.
+# Extra gate: only start autoscroll when AT-SPI says the target looks scrollable.
 require_scrollable = true
-# scroll_probe_timeout_ms = 15
 
 native_middle = [
   "firefox", "google-chrome", "chromium", "brave", "vivaldi",
   "msedge", "librewolf", "floorp", "zen", "navigator",
 ]
 
-# Always raw middle button (games / 3D / launchers).
 passthrough = [
   "steam_app", "steam_proton", "gameoverlay", "steamwebhelper",
   "lutris", "heroic", "legendary", "bottles", "proton", "wine", "gamescope",
