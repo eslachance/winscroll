@@ -17,6 +17,7 @@ from winmiddle.cursor import CursorController
 from winmiddle.daemon import MiddleDaemon
 from winmiddle.devices import listPointerDevices
 from winmiddle.focus import FocusHub, registerFocusHub
+from winmiddle.scrollprobe import ScrollProbe
 
 
 def buildParser() -> argparse.ArgumentParser:
@@ -88,7 +89,11 @@ def main(argv: list[str] | None = None) -> int:
     # Drawn LayerShell indicator (not cursor override — that steals scroll on Wayland).
     overlayController = CursorController() if config.showOverlay else None
 
-    daemon = MiddleDaemon(config, focusHub, overlayController)
+    scrollProbe = None
+    if config.requireScrollable:
+        scrollProbe = ScrollProbe(timeoutSec=max(0.005, config.scrollProbeTimeoutMs / 1000.0))
+
+    daemon = MiddleDaemon(config, focusHub, overlayController, scrollProbe=scrollProbe)
     thread = threading.Thread(target=daemon.run, name="winmiddle-input", daemon=True)
     thread.start()
 

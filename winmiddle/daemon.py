@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
     from winmiddle.config import Config
     from winmiddle.cursor import CursorController
+    from winmiddle.scrollprobe import ScrollProbe
 
 log = logging.getLogger("winmiddle.daemon")
 
@@ -37,10 +38,12 @@ class MiddleDaemon:
         config: Config,
         focusHub: FocusHub,
         overlay: CursorController | None,
+        scrollProbe: ScrollProbe | None = None,
     ) -> None:
         self.config = config
         self.focusHub = focusHub
         self.overlay = overlay  # cursor controller (name kept for minimal churn)
+        self.scrollProbe = scrollProbe
         self.mode = Mode.IDLE
         self._stop = threading.Event()
         self._originX = 0.0
@@ -80,6 +83,23 @@ class MiddleDaemon:
         if matchesAny(focus, self.config.nativeMiddleApps):
             return True
         return False
+
+    def _scrollTargetAllowsAutoscroll(self) -> bool:
+        """True only when we should enter PENDING_MIDDLE / autoscroll."""
+        if not self.config.requireScrollable:
+            return True
+        if self.scrollProbe is None:
+            return False
+        focus = self.focusHub.snapshot()
+        verdict = self.scrollProbe.probe(focus.cursorX, focus.cursorY)
+        log.info(
+            "scroll probe at (%s,%s) focus=%s → %s",
+            focus.cursorX,
+            focus.cursorY,
+            focus.resourceClass or "?",
+            verdict,
+        )
+        return verdict == "yes"
 
     def _enterAutoscroll(self) -> None:
         focus = self.focusHub.snapshot()
@@ -307,6 +327,13 @@ class MiddleDaemon:
             if passthroughMiddle:
                 forwardEvent(ui, event)
                 syn(ui)
+                return
+            if not self._scrollTargetAllowsAutoscroll():
+                # Not a scrollable target (tab, button, game/no-a11y, …):
+                # deliver a normal middle-click gesture.
+                injectButton(ui, ecodes.BTN_MIDDLE, 1)
+                syn(ui)
+                self.mode = Mode.MIDDLE_DRAG
                 return
             self.mode = Mode.PENDING_MIDDLE
             self._pendingDx = 0.0
