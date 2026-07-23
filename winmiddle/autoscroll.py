@@ -16,34 +16,44 @@ class Mode(Enum):
 
 @dataclass
 class ScrollSample:
-    wheelY: float  # positive = scroll up (evdev REL_WHEEL)
-    wheelX: float  # positive = scroll right (REL_HWHEEL)
+    """Wheel motion in notches per second (1.0 = one classic detent / sec)."""
+
+    notchesPerSecY: float  # positive = scroll up (evdev REL_WHEEL positive)
+    notchesPerSecX: float  # positive = scroll right
 
 
 def windowsScrollSpeed(
     dx: float,
     dy: float,
     *,
-    deadzonePx: float = 8.0,
-    gain: float = 0.045,
-    exponent: float = 1.35,
-    maxUnits: float = 28.0,
+    deadzonePx: float = 12.0,
+    refDistancePx: float = 100.0,
+    refNotchesPerSec: float = 10.0,
+    maxNotchesPerSec: float = 28.0,
+    power: float = 1.35,
 ) -> ScrollSample:
-    """Map cursor offset from origin → continuous wheel units (Windows-ish).
+    """Map cursor offset from origin → notches/sec (Windows-ish).
 
-    Moving the pointer *down* from the origin scrolls *down* (negative REL_WHEEL).
-    Deadzone in the center matches the classic four-way autoscroll icon.
+    Moving the pointer *down* from the origin scrolls *down* (negative Y notches).
+    Speed at `refDistancePx` past the deadzone equals `refNotchesPerSec`, then
+    curves with `power` and clamps at `maxNotchesPerSec`.
     """
     distance = math.hypot(dx, dy)
     if distance < deadzonePx:
         return ScrollSample(0.0, 0.0)
 
     excess = distance - deadzonePx
-    magnitude = min(maxUnits, gain * (excess**exponent))
+    scale = max(1e-6, refDistancePx)
+    notchesPerSec = refNotchesPerSec * ((excess / scale) ** power)
+    notchesPerSec = min(maxNotchesPerSec, notchesPerSec)
+
     nx = dx / distance
     ny = dy / distance
     # Screen y grows downward; Windows scrolls down when pointer is below origin.
-    return ScrollSample(wheelY=-ny * magnitude, wheelX=nx * magnitude)
+    return ScrollSample(
+        notchesPerSecY=-ny * notchesPerSec,
+        notchesPerSecX=nx * notchesPerSec,
+    )
 
 
 def shouldStartDrag(dx: float, dy: float, dragThresholdPx: float) -> bool:
