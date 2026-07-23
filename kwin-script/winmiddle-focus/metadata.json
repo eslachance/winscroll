@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Name": "winmiddle focus",
+        "Description": "Reports active window class and cursor position to winmiddle",
+        "Icon": "input-mouse",
+        "Authors": [
+            {
+                "Name": "winmiddle",
+                "Email": ""
+            }
+        ],
+        "Id": "winmiddle-focus",
+        "Version": "0.1",
+        "License": "MIT",
+        "ServiceTypes": ["KWin/Script"]
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

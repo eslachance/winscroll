@@ -1,0 +1,16 @@
+[Unit]
+Description=winmiddle — Windows-faithful middle-click autoscroll
+Documentation=file://%h/Projects/winmiddle/README.md
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env python3 -m winmiddle -v
+Restart=on-failure
+RestartSec=2
+# Inherit session so D-Bus + Wayland work
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=graphical-session.target
