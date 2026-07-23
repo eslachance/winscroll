@@ -1,6 +1,6 @@
 # Maintainer: eslachance <eslachance@users.noreply.github.com>
 pkgname=winmiddle-git
-pkgver=0.1.0.r0.g0000000
+pkgver=0.1.0.r0.ga06fe9d
 pkgrel=1
 pkgdesc="Windows-faithful middle-click autoscroll for Linux (Plasma/Wayland) — git"
 arch=('any')

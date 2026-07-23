@@ -25,18 +25,15 @@ optdepends=(
 )
 install=winmiddle.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('1d54f6b2c99ca56309e14640f5d6f220754e276e0eb295e1ffdd02402faf052d')
 
 build() {
-  cd "$srcdir/winscroll-v$pkgver"
+  cd "$srcdir/winscroll-$pkgver"
   python -m build --wheel --no-isolation
 }
 
 package() {
-  cd "$srcdir/winscroll-v$pkgver"
+  cd "$srcdir/winscroll-$pkgver"
   python -m installer --destdir="$pkgdir" --prefix=/usr dist/*.whl
   bash packaging/install-data.sh "$pkgdir"
 }
-
-# After the GitHub tag exists, replace SKIP with real checksums:
-#   updpkgsums && makepkg --printsrcinfo > .SRCINFO
