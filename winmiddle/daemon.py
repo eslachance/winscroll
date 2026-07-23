@@ -58,6 +58,9 @@ class MiddleDaemon:
         # Compositor cursor estimate during autoscroll (screen space).
         self._pointerScreenX = 0.0
         self._pointerScreenY = 0.0
+        # While the logical pointer is over a panel, keep the real cursor parked
+        # on the autoscroll origin so wheel events still hit the client.
+        self._scrollParked = False
         self.ui: UInput | None = None
         self.pointer = None
 
@@ -93,6 +96,7 @@ class MiddleDaemon:
         self._wheelAccumY = 0.0
         self._lastScrollTs = time.monotonic()
         self._autoscrollEnterTs = time.monotonic()
+        self._scrollParked = False
         self.mode = Mode.AUTOSCROLL
         log.info(
             "autoscroll ON at screen (%s,%s) focus=%s speed=%s",
@@ -105,28 +109,37 @@ class MiddleDaemon:
             self.overlay.requestShow(focus.cursorX, focus.cursorY)
 
     def _forwardAutoscrollMotion(self, ui: UInput, code: int, value: int) -> None:
-        """Forward pointer motion freely (including over panels).
+        """Track logical pointer; park the real cursor on origin over panels.
 
-        Wheel delivery while over a panel is handled in _injectScrollSteps via a
-        short hop into the work area — Wayland can only scroll the surface under
-        the cursor.
+        Wayland can only deliver wheel events to the surface under the cursor.
+        Hop-and-return in one uinput batch gets coalesced back onto the panel,
+        so while the logical position is outside the work area we keep the
+        compositor cursor parked on the middle-click origin instead.
         """
         if code == ecodes.REL_X:
             self._pointerScreenX += value
         else:
             self._pointerScreenY += value
+
+        if self._logicalPointerOutsideWorkArea():
+            if not self._scrollParked:
+                self._parkScrollCursor(ui)
+            return
+
+        if self._scrollParked:
+            self._unparkScrollCursor(ui)
+            return
+
         injectRelative(ui, code, value)
         syn(ui)
 
-    def _autoscrollVector(self) -> tuple[float, float]:
-        """Cursor−origin in screen space."""
-        originX, originY = self._autoscrollOriginScreen
-        return (
-            self._pointerScreenX - float(originX),
-            self._pointerScreenY - float(originY),
-        )
+    def _logicalPointerOutsideWorkArea(self) -> bool:
+        focus = self.focusHub.snapshot()
+        if focus.underPanel:
+            return True
+        return not self._workAreaContains(self._pointerScreenX, self._pointerScreenY)
 
-    def _workAreaContains(self, x: float, y: float, *, margin: int = 4) -> bool:
+    def _workAreaContains(self, x: float, y: float, *, margin: int = 2) -> bool:
         focus = self.focusHub.snapshot()
         workArea = focus.workArea
         if workArea is None:
@@ -137,34 +150,48 @@ class MiddleDaemon:
             and y0 + margin <= y <= y0 + height - 1 - margin
         )
 
-    def _scrollHopTarget(self) -> tuple[float, float]:
-        """Nearest point inside the work area — short hop when over a panel."""
+    def _parkScrollCursor(self, ui: UInput) -> None:
+        """Move compositor cursor to the autoscroll origin and keep it there."""
         focus = self.focusHub.snapshot()
-        workArea = focus.workArea
-        px, py = self._pointerScreenX, self._pointerScreenY
-        if workArea is None:
-            return px, py
-        x0, y0, width, height = workArea
-        margin = 4
-        tx = min(max(px, float(x0 + margin)), float(x0 + width - 1 - margin))
-        ty = min(max(py, float(y0 + margin)), float(y0 + height - 1 - margin))
-        return tx, ty
+        ox, oy = self._autoscrollOriginScreen
+        hopX = int(round(ox - float(focus.cursorX)))
+        hopY = int(round(oy - float(focus.cursorY)))
+        if hopX:
+            injectRelative(ui, ecodes.REL_X, hopX)
+        if hopY:
+            injectRelative(ui, ecodes.REL_Y, hopY)
+        if hopX or hopY:
+            syn(ui)
+        self._scrollParked = True
+        log.debug("panel scroll park at origin (%s,%s)", ox, oy)
+
+    def _unparkScrollCursor(self, ui: UInput) -> None:
+        """Restore compositor cursor to the logical (in-work-area) position."""
+        focus = self.focusHub.snapshot()
+        hopX = int(round(self._pointerScreenX - float(focus.cursorX)))
+        hopY = int(round(self._pointerScreenY - float(focus.cursorY)))
+        if hopX:
+            injectRelative(ui, ecodes.REL_X, hopX)
+        if hopY:
+            injectRelative(ui, ecodes.REL_Y, hopY)
+        if hopX or hopY:
+            syn(ui)
+        self._scrollParked = False
+        log.debug(
+            "panel scroll unpark to logical (%.0f,%.0f)",
+            self._pointerScreenX,
+            self._pointerScreenY,
+        )
+
+    def _autoscrollVector(self) -> tuple[float, float]:
+        """Cursor−origin in screen space (logical pointer, including over panels)."""
+        originX, originY = self._autoscrollOriginScreen
+        return (
+            self._pointerScreenX - float(originX),
+            self._pointerScreenY - float(originY),
+        )
 
     def _injectScrollSteps(self, ui: UInput, stepX: int, stepY: int) -> None:
-        """Inject wheel units, hopping into the work area if the cursor is on a panel."""
-        needHop = not self._workAreaContains(self._pointerScreenX, self._pointerScreenY)
-        hopX = hopY = 0
-        if needHop:
-            tx, ty = self._scrollHopTarget()
-            hopX = int(round(tx - self._pointerScreenX))
-            hopY = int(round(ty - self._pointerScreenY))
-            if hopX:
-                injectRelative(ui, ecodes.REL_X, hopX)
-            if hopY:
-                injectRelative(ui, ecodes.REL_Y, hopY)
-            if hopX or hopY:
-                syn(ui)
-
         if stepY:
             injectRelative(ui, ecodes.REL_WHEEL_HI_RES, stepY)
             notches = int(abs(stepY) / 120)
@@ -177,19 +204,13 @@ class MiddleDaemon:
                 injectRelative(ui, ecodes.REL_HWHEEL, notches if stepX > 0 else -notches)
         syn(ui)
 
-        if needHop and (hopX or hopY):
-            if hopX:
-                injectRelative(ui, ecodes.REL_X, -hopX)
-            if hopY:
-                injectRelative(ui, ecodes.REL_Y, -hopY)
-            syn(ui)
-
     def _leaveAutoscroll(self) -> None:
         if self.mode == Mode.AUTOSCROLL:
             log.info("autoscroll OFF")
         self.mode = Mode.IDLE
         self._wheelAccumX = 0.0
         self._wheelAccumY = 0.0
+        self._scrollParked = False
         if self.overlay:
             self.overlay.requestHide()
 
@@ -199,6 +220,13 @@ class MiddleDaemon:
         if now - self._lastScrollTs < interval:
             return
         self._lastScrollTs = now
+
+        # Keep park state honest even if the pointer stopped moving.
+        if self._logicalPointerOutsideWorkArea():
+            if not self._scrollParked:
+                self._parkScrollCursor(ui)
+        elif self._scrollParked:
+            self._unparkScrollCursor(ui)
 
         dx, dy = self._autoscrollVector()
         sample = windowsScrollSpeed(

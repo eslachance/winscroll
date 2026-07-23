@@ -22,8 +22,10 @@ class FocusState:
     resourceName: str = ""
     cursorX: int = 0
     cursorY: int = 0
-    # Screen availableGeometry (excludes panels): x, y, w, h — or None.
+    # Screen availableGeometry (excludes strut panels): x, y, w, h — or None.
     workArea: tuple[int, int, int, int] | None = None
+    # True when the topmost window under the cursor is a dock/panel.
+    underPanel: bool = False
 
 
 def _workAreaAt(cursorX: int, cursorY: int) -> tuple[int, int, int, int] | None:
@@ -54,10 +56,11 @@ class FocusHub(QObject):
                 cursorX=self._state.cursorX,
                 cursorY=self._state.cursorY,
                 workArea=self._state.workArea,
+                underPanel=self._state.underPanel,
             )
 
     def refreshWorkArea(self) -> None:
-        """Periodic Qt-thread refresh so panel clamp works even if focus script lags."""
+        """Periodic Qt-thread refresh so panel detection works if the script lags."""
         with self._lock:
             cx, cy = self._state.cursorX, self._state.cursorY
         wa = _workAreaAt(cx, cy)
@@ -66,8 +69,15 @@ class FocusHub(QObject):
         with self._lock:
             self._state.workArea = wa
 
-    @pyqtSlot(str, str, int, int)
-    def Update(self, resourceClass: str, resourceName: str, cursorX: int, cursorY: int) -> None:
+    @pyqtSlot(str, str, int, int, bool)
+    def Update(
+        self,
+        resourceClass: str,
+        resourceName: str,
+        cursorX: int,
+        cursorY: int,
+        underPanel: bool = False,
+    ) -> None:
         wa = _workAreaAt(int(cursorX), int(cursorY))
         with self._lock:
             self._state = FocusState(
@@ -76,6 +86,7 @@ class FocusHub(QObject):
                 cursorX=int(cursorX),
                 cursorY=int(cursorY),
                 workArea=wa,
+                underPanel=bool(underPanel),
             )
 
 
