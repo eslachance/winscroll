@@ -1,5 +1,7 @@
 # winmiddle
 
+> **AI disclaimer:** This project was fully AI-generated under the guidance of a veteran developer with 25 years of tech experience — but it *was* generated fully by AI.
+
 **Windows-faithful middle-click autoscroll for Linux** — hold-to-scroll by default, with optional Windows click-to-toggle and modifier gates.
 
 Primary target: **KDE Plasma (Wayland) on Arch-based distros** (Arch, CachyOS, EndeavourOS, …). The daemon can run elsewhere; overlay placement and per-app filters work best with the bundled KWin script.
