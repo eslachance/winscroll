@@ -107,34 +107,40 @@ class MiddleDaemon:
     def _forwardAutoscrollMotion(self, ui: UInput, code: int, value: int) -> None:
         """Forward pointer motion, clamped to availableGeometry (excludes panels).
 
-        Scroll speed still uses the unclamped _cursorX/_cursorY vector so pushing
-        against the panel edge keeps accelerating scroll (Windows-like).
+        Scroll vector is derived from this clamped on-screen position (not raw
+        physical deltas), so pushing into the panel cannot accumulate drift.
         """
         focus = self.focusHub.snapshot()
         workArea = focus.workArea
-        if workArea is None:
-            injectRelative(ui, code, value)
-            syn(ui)
-            return
-
-        x0, y0, width, height = workArea
-        x1 = x0 + max(1, width) - 1
-        y1 = y0 + max(1, height) - 1
 
         if code == ecodes.REL_X:
             newPos = self._pointerScreenX + value
-            clamped = min(max(newPos, float(x0)), float(x1))
-            deliver = int(round(clamped - self._pointerScreenX))
-            self._pointerScreenX = clamped
+            if workArea is not None:
+                x0, _, width, _ = workArea
+                x1 = x0 + max(1, width) - 1
+                newPos = min(max(newPos, float(x0)), float(x1))
+            deliver = int(round(newPos - self._pointerScreenX))
+            self._pointerScreenX = newPos
         else:
             newPos = self._pointerScreenY + value
-            clamped = min(max(newPos, float(y0)), float(y1))
-            deliver = int(round(clamped - self._pointerScreenY))
-            self._pointerScreenY = clamped
+            if workArea is not None:
+                _, y0, _, height = workArea
+                y1 = y0 + max(1, height) - 1
+                newPos = min(max(newPos, float(y0)), float(y1))
+            deliver = int(round(newPos - self._pointerScreenY))
+            self._pointerScreenY = newPos
 
         if deliver:
             injectRelative(ui, code, deliver)
             syn(ui)
+
+    def _autoscrollVector(self) -> tuple[float, float]:
+        """Cursor−origin in screen space using the clamped compositor position."""
+        originX, originY = self._autoscrollOriginScreen
+        return (
+            self._pointerScreenX - float(originX),
+            self._pointerScreenY - float(originY),
+        )
 
     def _leaveAutoscroll(self) -> None:
         if self.mode == Mode.AUTOSCROLL:
@@ -152,8 +158,7 @@ class MiddleDaemon:
             return
         self._lastScrollTs = now
 
-        dx = self._cursorX - self._originX
-        dy = self._cursorY - self._originY
+        dx, dy = self._autoscrollVector()
         sample = windowsScrollSpeed(
             dx,
             dy,

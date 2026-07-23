@@ -25,4 +25,4 @@ The autoscroll indicator + scroll path below is **working on Plasma 6 Wayland** 
 
 ## Panel / work-area note
 
-During autoscroll, clamp **forwarded** pointer motion to the screen `availableGeometry` (excludes Plasma panels) so the compositor cursor cannot enter the panel and steal wheel focus. Keep the **unclamped** vector for scroll speed (edge-push).
+During autoscroll, clamp **forwarded** pointer motion to the screen `availableGeometry` (excludes Plasma panels) so the compositor cursor cannot enter the panel and steal wheel focus. The scroll/direction vector must use that **same clamped on-screen position** relative to the origin — never accumulate raw physical deltas while clamped, or the vector drifts.
