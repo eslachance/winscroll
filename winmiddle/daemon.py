@@ -55,7 +55,7 @@ class MiddleDaemon:
         self._lastScrollTs = 0.0
         self._autoscrollOriginScreen = (0, 0)
         self._autoscrollEnterTs = 0.0
-        # Compositor cursor estimate during autoscroll (clamped to work area).
+        # Compositor cursor estimate during autoscroll (screen space).
         self._pointerScreenX = 0.0
         self._pointerScreenY = 0.0
         self.ui: UInput | None = None
@@ -105,42 +105,84 @@ class MiddleDaemon:
             self.overlay.requestShow(focus.cursorX, focus.cursorY)
 
     def _forwardAutoscrollMotion(self, ui: UInput, code: int, value: int) -> None:
-        """Forward pointer motion, clamped to availableGeometry (excludes panels).
+        """Forward pointer motion freely (including over panels).
 
-        Scroll vector is derived from this clamped on-screen position (not raw
-        physical deltas), so pushing into the panel cannot accumulate drift.
+        Wheel delivery while over a panel is handled in _injectScrollSteps via a
+        short hop into the work area — Wayland can only scroll the surface under
+        the cursor.
         """
-        focus = self.focusHub.snapshot()
-        workArea = focus.workArea
-
         if code == ecodes.REL_X:
-            newPos = self._pointerScreenX + value
-            if workArea is not None:
-                x0, _, width, _ = workArea
-                x1 = x0 + max(1, width) - 1
-                newPos = min(max(newPos, float(x0)), float(x1))
-            deliver = int(round(newPos - self._pointerScreenX))
-            self._pointerScreenX = newPos
+            self._pointerScreenX += value
         else:
-            newPos = self._pointerScreenY + value
-            if workArea is not None:
-                _, y0, _, height = workArea
-                y1 = y0 + max(1, height) - 1
-                newPos = min(max(newPos, float(y0)), float(y1))
-            deliver = int(round(newPos - self._pointerScreenY))
-            self._pointerScreenY = newPos
-
-        if deliver:
-            injectRelative(ui, code, deliver)
-            syn(ui)
+            self._pointerScreenY += value
+        injectRelative(ui, code, value)
+        syn(ui)
 
     def _autoscrollVector(self) -> tuple[float, float]:
-        """Cursor−origin in screen space using the clamped compositor position."""
+        """Cursor−origin in screen space."""
         originX, originY = self._autoscrollOriginScreen
         return (
             self._pointerScreenX - float(originX),
             self._pointerScreenY - float(originY),
         )
+
+    def _workAreaContains(self, x: float, y: float, *, margin: int = 4) -> bool:
+        focus = self.focusHub.snapshot()
+        workArea = focus.workArea
+        if workArea is None:
+            return True
+        x0, y0, width, height = workArea
+        return (
+            x0 + margin <= x <= x0 + width - 1 - margin
+            and y0 + margin <= y <= y0 + height - 1 - margin
+        )
+
+    def _scrollHopTarget(self) -> tuple[float, float]:
+        """Nearest point inside the work area — short hop when over a panel."""
+        focus = self.focusHub.snapshot()
+        workArea = focus.workArea
+        px, py = self._pointerScreenX, self._pointerScreenY
+        if workArea is None:
+            return px, py
+        x0, y0, width, height = workArea
+        margin = 4
+        tx = min(max(px, float(x0 + margin)), float(x0 + width - 1 - margin))
+        ty = min(max(py, float(y0 + margin)), float(y0 + height - 1 - margin))
+        return tx, ty
+
+    def _injectScrollSteps(self, ui: UInput, stepX: int, stepY: int) -> None:
+        """Inject wheel units, hopping into the work area if the cursor is on a panel."""
+        needHop = not self._workAreaContains(self._pointerScreenX, self._pointerScreenY)
+        hopX = hopY = 0
+        if needHop:
+            tx, ty = self._scrollHopTarget()
+            hopX = int(round(tx - self._pointerScreenX))
+            hopY = int(round(ty - self._pointerScreenY))
+            if hopX:
+                injectRelative(ui, ecodes.REL_X, hopX)
+            if hopY:
+                injectRelative(ui, ecodes.REL_Y, hopY)
+            if hopX or hopY:
+                syn(ui)
+
+        if stepY:
+            injectRelative(ui, ecodes.REL_WHEEL_HI_RES, stepY)
+            notches = int(abs(stepY) / 120)
+            if notches:
+                injectRelative(ui, ecodes.REL_WHEEL, notches if stepY > 0 else -notches)
+        if stepX:
+            injectRelative(ui, ecodes.REL_HWHEEL_HI_RES, stepX)
+            notches = int(abs(stepX) / 120)
+            if notches:
+                injectRelative(ui, ecodes.REL_HWHEEL, notches if stepX > 0 else -notches)
+        syn(ui)
+
+        if needHop and (hopX or hopY):
+            if hopX:
+                injectRelative(ui, ecodes.REL_X, -hopX)
+            if hopY:
+                injectRelative(ui, ecodes.REL_Y, -hopY)
+            syn(ui)
 
     def _leaveAutoscroll(self) -> None:
         if self.mode == Mode.AUTOSCROLL:
@@ -183,17 +225,7 @@ class MiddleDaemon:
         self._wheelAccumY -= stepY
         self._wheelAccumX -= stepX
 
-        if stepY:
-            injectRelative(ui, ecodes.REL_WHEEL_HI_RES, stepY)
-            notches = int(abs(stepY) / 120)
-            if notches:
-                injectRelative(ui, ecodes.REL_WHEEL, notches if stepY > 0 else -notches)
-        if stepX:
-            injectRelative(ui, ecodes.REL_HWHEEL_HI_RES, stepX)
-            notches = int(abs(stepX) / 120)
-            if notches:
-                injectRelative(ui, ecodes.REL_HWHEEL, notches if stepX > 0 else -notches)
-        syn(ui)
+        self._injectScrollSteps(ui, stepX, stepY)
         if self.overlay:
             self.overlay.requestDirection(dx, dy, self.config.deadzonePx)
 

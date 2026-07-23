@@ -25,4 +25,8 @@ The autoscroll indicator + scroll path below is **working on Plasma 6 Wayland** 
 
 ## Panel / work-area note
 
-During autoscroll, clamp **forwarded** pointer motion to the screen `availableGeometry` (excludes Plasma panels) so the compositor cursor cannot enter the panel and steal wheel focus. The scroll/direction vector must use that **same clamped on-screen position** relative to the origin — never accumulate raw physical deltas while clamped, or the vector drifts.
+Wayland delivers wheel events only to the surface under the cursor. During
+autoscroll, if the pointer is outside `availableGeometry` (e.g. on a Plasma
+panel), briefly hop into the nearest work-area pixel, inject wheel, hop back.
+Do not reintroduce hard pointer clamping that accumulates scroll-vector drift.
+
