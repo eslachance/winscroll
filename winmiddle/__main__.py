@@ -39,6 +39,11 @@ def buildParser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-service", action="store_true", help="With --setup, skip enabling the user service")
     parser.add_argument("--no-overlay", action="store_true", help="Disable the drawn autoscroll indicator")
     parser.add_argument("--no-grab", action="store_true", help="Do not exclusive-grab the physical mouse (debug)")
+    parser.add_argument(
+        "--ui",
+        action="store_true",
+        help="Open the settings UI instead of running the daemon",
+    )
     return parser
 
 
@@ -56,9 +61,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.list_devices:
-        for device in listPointerDevices():
+        for device in listPointerDevices(requireAccess=False):
+            access = "rw" if device.accessible else "no-access"
             print(
-                f"{device.path}\tvid={device.vendor:04x}\tpid={device.product:04x}\t{device.name}"
+                f"{device.path}\tvid={device.vendor:04x}\tpid={device.product:04x}\t"
+                f"{access}\t{device.name}"
             )
         return 0
 
@@ -73,6 +80,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.setup:
         return runSetup(skipUdev=args.skip_udev, skipService=args.skip_service)
+
+    if args.ui:
+        from winmiddle.ui import runUi
+
+        # Forward -v to the UI process argv shape.
+        uiArgv: list[str] = []
+        if args.verbose:
+            uiArgv.append("-" + "v" * args.verbose)
+        return runUi(uiArgv)
 
     config = loadConfig(args.config)
     if args.no_overlay:

@@ -1,5 +1,6 @@
 # Generic rule shipped by the package (also in packaging/udev/99-winmiddle.rules):
 KERNEL=="uinput", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_MOUSE}=="1", MODE="0660", GROUP="input", TAG+="uaccess", TAG+="seat"
 
-# Optional mouse-specific rule written by `winmiddle --setup` (example):
-# KERNEL=="event*", SUBSYSTEM=="input", ATTRS{idVendor}=="3434", ATTRS{idProduct}=="0b10", MODE="0660", TAG+="uaccess"
+# Do NOT use RUN+="/usr/bin/setfacl … /dev/%k" — %k is only "eventN", not
+# "/dev/input/eventN", so the ACL never lands and hot-plugged mice stay invisible.

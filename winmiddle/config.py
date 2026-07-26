@@ -135,6 +135,99 @@ def configPaths() -> list[Path]:
     ]
 
 
+def primaryConfigPath() -> Path:
+    """Preferred write path for new or UI-saved configs."""
+    return configPaths()[0]
+
+
+def _tomlString(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _tomlStringList(values: list[str], *, indent: str = "  ") -> str:
+    if not values:
+        return "[]"
+    inner = ", ".join(_tomlString(v) for v in values)
+    # Keep short lists on one line; wrap longer ones.
+    if len(inner) <= 72:
+        return f"[{inner}]"
+    lines = [f"{indent}{_tomlString(v)}," for v in values]
+    return "[\n" + "\n".join(lines) + "\n]"
+
+
+def configToToml(cfg: Config) -> str:
+    """Serialize a Config to the project TOML layout."""
+    deviceLines = ["[device]"]
+    if cfg.devicePath:
+        deviceLines.append(f"path = {_tomlString(cfg.devicePath)}")
+    if cfg.deviceVendor is not None:
+        deviceLines.append(f"vendor = {cfg.deviceVendor:#06x}")
+    if cfg.deviceProduct is not None:
+        deviceLines.append(f"product = {cfg.deviceProduct:#06x}")
+    deviceLines.append(f"grab = {'true' if cfg.grabDevice else 'false'}")
+
+    activationLines = [
+        "[activation]",
+        f"hold = {'true' if cfg.holdScroll else 'false'}",
+        f"toggle = {'true' if cfg.toggleScroll else 'false'}",
+        f"modifier = {_tomlString(cfg.activationModifier)}",
+        f"modifier_for = {_tomlString(cfg.modifierFor)}",
+    ]
+
+    scrollLines = [
+        "[scroll]",
+        f"speed = {_tomlString(cfg.speed)}",
+        f"drag_threshold_px = {cfg.dragThresholdPx:g}",
+        f"click_max_ms = {cfg.clickMaxMs:g}",
+        f"hz = {cfg.scrollHz:g}",
+        f"exit_on_wheel = {'true' if cfg.exitOnWheel else 'false'}",
+        f"wheel_grace_ms = {cfg.wheelGraceMs:g}",
+        f"deadzone_px = {cfg.deadzonePx:g}",
+        f"ref_distance_px = {cfg.refDistancePx:g}",
+        f"ref_nps = {cfg.refNotchesPerSec:g}",
+        f"max_nps = {cfg.maxNotchesPerSec:g}",
+        f"power = {cfg.scrollPower:g}",
+    ]
+
+    appsLines = [
+        "[apps]",
+        f"require_scrollable = {'true' if cfg.requireScrollable else 'false'}",
+        f"scroll_probe_timeout_ms = {cfg.scrollProbeTimeoutMs:g}",
+        f"native_middle = {_tomlStringList(cfg.nativeMiddleApps)}",
+        f"passthrough = {_tomlStringList(cfg.passthroughApps)}",
+    ]
+
+    uiLines = [
+        "[ui]",
+        f"overlay = {'true' if cfg.showOverlay else 'false'}",
+    ]
+
+    sections = [
+        "# winmiddle — Windows-faithful middle-click autoscroll",
+        "",
+        "\n".join(deviceLines),
+        "",
+        "\n".join(activationLines),
+        "",
+        "\n".join(scrollLines),
+        "",
+        "\n".join(appsLines),
+        "",
+        "\n".join(uiLines),
+        "",
+    ]
+    return "\n".join(sections)
+
+
+def saveConfig(cfg: Config, path: Path | None = None) -> Path:
+    """Write config TOML. Defaults to the primary XDG path."""
+    target = path or primaryConfigPath()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(configToToml(cfg), encoding="utf-8")
+    return target
+
+
 def applySpeedPreset(cfg: Config, speed: str) -> None:
     key = (speed or "normal").strip().lower()
     if key not in SPEED_PRESETS:
@@ -228,9 +321,12 @@ def loadConfig(path: Path | None = None) -> Config:
 
 
 def defaultConfigText() -> str:
+    """Commented starter config written by --setup / --write-config."""
     return """# winmiddle — Windows-faithful middle-click autoscroll
+# Prefer editing via: winmiddle-ui
 
 [device]
+# path = "/dev/input/event12"
 # vendor = 0x046d
 # product = 0x405e
 grab = true

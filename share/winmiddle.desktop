@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=winmiddle
+GenericName=Middle-click Autoscroll
+Comment=Configure Windows-style middle-click autoscroll
+Exec=winmiddle-ui
+Icon=winmiddle
+Terminal=false
+Categories=Settings;Qt;HardwareSettings;
+Keywords=scroll;middle;mouse;autoscroll;windows;
+StartupNotify=true
+StartupWMClass=winmiddle
+X-KDE-StartupNotify=true

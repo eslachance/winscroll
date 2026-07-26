@@ -10,12 +10,12 @@ import tempfile
 from pathlib import Path
 
 from winmiddle.config import defaultConfigText
-from winmiddle.devices import listPointerDevices
 from winmiddle.paste import applyAllPasteAndBrowserFixes
 
 log = logging.getLogger("winmiddle.setup")
 
-MOUSE_UDEV_PATH = Path("/etc/udev/rules.d/99-winmiddle-mouse.rules")
+MOUSE_UDEV_PATH = Path("/etc/udev/rules.d/99-winmiddle.rules")
+LEGACY_MOUSE_UDEV_PATH = Path("/etc/udev/rules.d/99-winmiddle-mouse.rules")
 
 
 def ensureConfig(configPath: Path | None = None) -> Path:
@@ -80,25 +80,30 @@ def enableKwinScript() -> bool:
     return True
 
 
-def installMouseUdevRule(*, vendor: int | None = None, product: int | None = None) -> bool:
-    """Write a device-specific uaccess rule so the seated user can grab the mouse."""
-    if vendor is None or product is None:
-        devices = list(listPointerDevices())
-        if not devices:
-            log.warning("No middle-button pointer found; skipping mouse udev rule")
-            return False
-        vendor = devices[0].vendor
-        product = devices[0].product
-        log.info("Detected mouse vid=%04x pid=%04x (%s)", vendor, product, devices[0].name)
+def mouseUdevRuleText() -> str:
+    """udev rules that work for any mouse (not a single VID/PID).
 
-    body = (
-        "# winmiddle — allow seated user to grab this mouse\n"
-        f'KERNEL=="event*", SUBSYSTEM=="input", ATTRS{{idVendor}}=="{vendor:04x}", '
-        f'ATTRS{{idProduct}}=="{product:04x}", MODE="0660", TAG+="uaccess"\n'
+    Stock 70-uaccess.rules does not tag mice. A late TAG+=uaccess alone is also
+    not enough: 71-seat.rules has already run, so we must TAG+=seat ourselves.
+    Never RUN setfacl with /dev/%k — that expands to /dev/eventN (wrong path).
+    """
+    return (
+        "# winmiddle — virtual pointer + any USB/Bluetooth mouse for the seated user\n"
+        'KERNEL=="uinput", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"\n'
+        'SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_MOUSE}=="1", '
+        'MODE="0660", GROUP="input", TAG+="uaccess", TAG+="seat"\n'
     )
+
+
+def installMouseUdevRule(*, vendor: int | None = None, product: int | None = None) -> bool:
+    """Install a generic mouse+uinput uaccess rule (vendor/product kept for API compat)."""
+    del vendor, product  # VID/PID pinning breaks when users swap mice
+    body = mouseUdevRuleText()
 
     if os.geteuid() == 0:
         MOUSE_UDEV_PATH.write_text(body, encoding="utf-8")
+        MOUSE_UDEV_PATH.chmod(0o644)
+        LEGACY_MOUSE_UDEV_PATH.unlink(missing_ok=True)
     else:
         if not shutil.which("sudo"):
             log.warning("sudo missing; could not install %s", MOUSE_UDEV_PATH)
@@ -111,6 +116,8 @@ def installMouseUdevRule(*, vendor: int | None = None, product: int | None = Non
             if result.returncode != 0:
                 log.warning("Could not install mouse udev rule at %s", MOUSE_UDEV_PATH)
                 return False
+            subprocess.run(["sudo", "chmod", "644", str(MOUSE_UDEV_PATH)], check=False)
+            subprocess.run(["sudo", "rm", "-f", str(LEGACY_MOUSE_UDEV_PATH)], check=False)
         finally:
             Path(tmpPath).unlink(missing_ok=True)
 
@@ -153,10 +160,11 @@ def runSetup(*, skipUdev: bool = False, skipService: bool = False) -> int:
                 "",
                 "winmiddle setup complete.",
                 "  • Log out and back in once so KWin drops primary selection.",
-                "  • Status:  systemctl --user status winmiddle",
-                "  • Logs:    journalctl --user -u winmiddle -f",
-                "  • Devices: winmiddle --list-devices",
-                "  • Config:  ~/.config/winmiddle/config.toml",
+                "  • Settings: winmiddle-ui  (or: winmiddle --ui)",
+                "  • Status:   systemctl --user status winmiddle",
+                "  • Logs:     journalctl --user -u winmiddle -f",
+                "  • Devices:  winmiddle --list-devices",
+                "  • Config:   ~/.config/winmiddle/config.toml",
                 "",
             ]
         )

@@ -1,5 +1,7 @@
-# winmiddle — allow seated user to create the virtual pointer (uinput).
-# Mouse grab: either add your user to the `input` group, or run
-#   winmiddle --setup
-# to install a device-specific uaccess rule under /etc/udev/rules.d/.
+# winmiddle — virtual pointer + physical mouse grab for the seated user.
+#
+# Mice are not covered by stock 70-uaccess.rules (only joysticks are).
+# TAG+="seat" must be set here: this file runs after 71-seat.rules, so the
+# automatic "uaccess → seat" promotion in that file never sees our tag.
 KERNEL=="uinput", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_MOUSE}=="1", MODE="0660", GROUP="input", TAG+="uaccess", TAG+="seat"

@@ -27,6 +27,7 @@ Issues = "https://github.com/eslachance/winscroll/issues"
 
 [project.scripts]
 winmiddle = "winmiddle.__main__:main"
+winmiddle-ui = "winmiddle.ui.app:main"
 
 [tool.hatch.build]
 exclude = [

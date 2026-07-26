@@ -37,7 +37,24 @@ cd winscroll
 
 Uninstall from-source installs with `./uninstall.sh`. Packaged installs: `sudo pacman -R winmiddle` (or `winmiddle-git`).
 
+## Settings UI
+
+```bash
+winmiddle-ui
+# or: winmiddle --ui
+```
+
+Opens a Plasma-friendly PyQt6 app (also in the app launcher as **winmiddle**) to:
+
+- Start / stop / restart the user daemon and enable it at login
+- Configure activation, scroll speed, app lists, and mouse device
+- Re-run setup steps (paste-kill, KWin script, mouse udev)
+
+Closing the window keeps a system-tray icon; use **Quit** from the tray menu to exit the UI. The daemon keeps running as a systemd user service.
+
 ## Activation (config)
+
+Prefer the settings UI above. The same options live in `~/.config/winmiddle/config.toml`:
 
 ```toml
 [activation]
@@ -69,12 +86,13 @@ Paste-kill: KDE EnablePrimarySelection=false, GTK, Firefox prefs, Chrome flag
 ## Status / tuning
 
 ```bash
+winmiddle-ui
 systemctl --user status winmiddle
 journalctl --user -u winmiddle -f
 winmiddle --list-devices
 ```
 
-Config: `~/.config/winmiddle/config.toml`
+Config: `~/.config/winmiddle/config.toml` (also edited by the settings UI)
 
 ```toml
 [scroll]
@@ -91,7 +109,7 @@ require_scrollable = true                          # AT-SPI gate
 
 - Python 3.11+ with `python-evdev` and `python-pyqt6`
 - `layer-shell-qt` (origin glyph on Wayland)
-- Permission to read your mouse + `/dev/uinput` (`winmiddle --setup` writes a mouse `uaccess` rule; the package ships a generic uinput rule)
+- Permission to read your mouse + `/dev/uinput` (`winmiddle --setup` installs a generic `ID_INPUT_MOUSE` + uinput `uaccess`/`seat` rule so hot-plugged mice work without re-pinning VID/PID)
 - KDE Plasma recommended (ships a KWin script for focus/cursor). Other DEs: daemon still autoscrolls, but overlay position / per-app filters degrade without a focus provider.
 
 Optional: `python-gobject` + `at-spi2-core` for scrollable-under-cursor probing.

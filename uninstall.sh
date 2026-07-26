@@ -23,9 +23,10 @@ if command -v kwriteconfig6 >/dev/null; then
 fi
 rm -rf "$KWIN_SCRIPT_DST"
 
-log "Removing launcher + package + desktop entry"
-rm -f "$BIN_DIR/winmiddle"
-rm -f "$APP_DIR/winmiddle-overlay.desktop"
+log "Removing launcher + package + desktop entries"
+rm -f "$BIN_DIR/winmiddle" "$BIN_DIR/winmiddle-ui"
+rm -f "$APP_DIR/winmiddle-overlay.desktop" "$APP_DIR/winmiddle.desktop"
+rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps/winmiddle.svg"
 rm -rf "$SITE_DIR"
 
 log "Re-enabling KDE primary selection (middle-click paste)"
@@ -36,7 +37,8 @@ fi
 cat <<EOF
 Uninstalled from-source winmiddle.
 Config kept at ~/.config/winmiddle/ (remove manually if desired).
-Optional mouse udev rule:
+Optional mouse/uinput udev rule:
+  sudo rm -f /etc/udev/rules.d/99-winmiddle.rules
   sudo rm -f /etc/udev/rules.d/99-winmiddle-mouse.rules
   sudo udevadm control --reload-rules
 Log out/in for KWin primary-selection change.

@@ -19,6 +19,10 @@ install -Dm644 "$ROOT_DIR/packaging/udev/99-winmiddle.rules" \
 
 install -Dm644 "$ROOT_DIR/share/winmiddle-overlay.desktop" \
   "$DESTDIR$PREFIX/share/applications/winmiddle-overlay.desktop"
+install -Dm644 "$ROOT_DIR/share/winmiddle.desktop" \
+  "$DESTDIR$PREFIX/share/applications/winmiddle.desktop"
+install -Dm644 "$ROOT_DIR/share/icons/hicolor/scalable/apps/winmiddle.svg" \
+  "$DESTDIR$PREFIX/share/icons/hicolor/scalable/apps/winmiddle.svg"
 
 install -Dm644 "$ROOT_DIR/kwin-script/winmiddle-focus/metadata.json" \
   "$DESTDIR$PREFIX/share/kwin/scripts/winmiddle-focus/metadata.json"

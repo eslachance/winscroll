@@ -42,11 +42,24 @@ cp -a "$ROOT_DIR/kwin-script/winmiddle-focus/metadata.json" "$KWIN_SCRIPT_DST/"
 cp -a "$ROOT_DIR/kwin-script/winmiddle-focus/contents/code/main.js" "$KWIN_SCRIPT_DST/contents/code/"
 ok "KWin script → $KWIN_SCRIPT_DST"
 
-log "Installing systemd --user unit + desktop entry"
+log "Installing systemd --user unit + desktop entries"
 install -Dm644 "$ROOT_DIR/systemd/winmiddle.service" "$UNIT_DIR/winmiddle.service"
 sed -i "s|^ExecStart=.*|ExecStart=$BIN_DIR/winmiddle -v|" "$UNIT_DIR/winmiddle.service"
 install -Dm644 "$ROOT_DIR/share/winmiddle-overlay.desktop" "$APP_DIR/winmiddle-overlay.desktop"
 sed -i "s|^Exec=.*|Exec=$BIN_DIR/winmiddle|" "$APP_DIR/winmiddle-overlay.desktop"
+
+cat >"$BIN_DIR/winmiddle-ui" <<EOF
+#!/usr/bin/env bash
+export PYTHONPATH="${SITE_DIR}\${PYTHONPATH:+:\$PYTHONPATH}"
+exec /usr/bin/python3 -m winmiddle.ui.app "\$@"
+EOF
+chmod +x "$BIN_DIR/winmiddle-ui"
+ok "Launcher $BIN_DIR/winmiddle-ui"
+
+ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
+install -Dm644 "$ROOT_DIR/share/icons/hicolor/scalable/apps/winmiddle.svg" "$ICON_DIR/winmiddle.svg"
+install -Dm644 "$ROOT_DIR/share/winmiddle.desktop" "$APP_DIR/winmiddle.desktop"
+sed -i "s|^Exec=.*|Exec=$BIN_DIR/winmiddle-ui|" "$APP_DIR/winmiddle.desktop"
 systemctl --user daemon-reload
 ok "User unit $UNIT_DIR/winmiddle.service"
 
@@ -60,6 +73,7 @@ cat <<EOF
 ────────────────────────────────────────────────────────────
 winmiddle is installed from source.
 
+  Settings: winmiddle-ui   (or: winmiddle --ui)
   Status:   systemctl --user status winmiddle
   Logs:     journalctl --user -u winmiddle -f
   Devices:  winmiddle --list-devices
