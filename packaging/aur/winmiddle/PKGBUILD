@@ -25,7 +25,7 @@ optdepends=(
 )
 install=winmiddle.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('0345ddde37331a952bad271dbbcdc2e049dfc44fc95dc39fa16d55ff319f3f47')
 
 build() {
   cd "$srcdir/winscroll-$pkgver"

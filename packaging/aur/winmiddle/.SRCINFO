@@ -18,6 +18,6 @@ pkgbase = winmiddle
 	optdepends = at-spi2-core: accessibility bus for scroll probing
 	install = winmiddle.install
 	source = winmiddle-0.2.1.tar.gz::https://github.com/eslachance/winscroll/archive/refs/tags/v0.2.1.tar.gz
-	sha256sums = SKIP
+	sha256sums = 0345ddde37331a952bad271dbbcdc2e049dfc44fc95dc39fa16d55ff319f3f47
 
 pkgname = winmiddle
