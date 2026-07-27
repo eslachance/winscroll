@@ -29,55 +29,120 @@ def ensureConfig(configPath: Path | None = None) -> Path:
     return target
 
 
+def kwinScriptMainJs() -> Path | None:
+    """Prefer the packaged system script; fall back to a user-local copy.
+
+    System first matters for AUR/distro installs: a stale ~/.local copy without
+    KPackageStructure can shadow the fixed package and prevent Plasma 6 load.
+    """
+    candidates = [
+        Path("/usr/share/kwin/scripts/winmiddle-focus/contents/code/main.js"),
+        Path.home() / ".local/share/kwin/scripts/winmiddle-focus/contents/code/main.js",
+    ]
+    for mainJs in candidates:
+        if mainJs.is_file():
+            return mainJs
+    return None
+
+
+def _qdbusBin() -> str | None:
+    return shutil.which("qdbus6") or shutil.which("qdbus")
+
+
+def isKwinScriptLoaded() -> bool | None:
+    """True/False if KWin answers; None if qdbus/KWin unavailable."""
+    qdbus = _qdbusBin()
+    if not qdbus:
+        return None
+    result = subprocess.run(
+        [
+            qdbus,
+            "org.kde.KWin",
+            "/Scripting",
+            "org.kde.kwin.Scripting.isScriptLoaded",
+            "winmiddle-focus",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return (result.stdout or "").strip().lower() in {"true", "1"}
+
+
 def enableKwinScript() -> bool:
-    """Enable the packaged or user-local winmiddle-focus KWin script."""
+    """Persist-enable + load winmiddle-focus so cursor/focus reach the daemon.
+
+    Safe to call on every daemon start: AUR install only ships files; without
+    Plugins/winmiddle-focusEnabled=true KWin never loads the script after reboot.
+    """
     kwrite = shutil.which("kwriteconfig6") or shutil.which("kwriteconfig5")
     if not kwrite:
         log.warning("kwriteconfig6 missing — enable KWin script winmiddle-focus manually")
+        return False
+
+    if kwinScriptMainJs() is None:
+        log.warning("winmiddle-focus KWin script not installed under /usr/share or ~/.local")
         return False
 
     subprocess.run(
         [kwrite, "--file", "kwinrc", "--group", "Plugins", "--key", "winmiddle-focusEnabled", "true"],
         check=False,
     )
-    qdbus = shutil.which("qdbus6") or shutil.which("qdbus")
-    if qdbus:
-        subprocess.run([qdbus, "org.kde.KWin", "/KWin", "reconfigure"], check=False)
-        # Prefer loading the user or system script path if present.
-        candidates = [
-            Path.home() / ".local/share/kwin/scripts/winmiddle-focus/contents/code/main.js",
-            Path("/usr/share/kwin/scripts/winmiddle-focus/contents/code/main.js"),
-        ]
-        for mainJs in candidates:
-            if mainJs.is_file():
-                subprocess.run(
-                    [
-                        qdbus,
-                        "org.kde.KWin",
-                        "/Scripting",
-                        "org.kde.kwin.Scripting.unloadScript",
-                        "winmiddle-focus",
-                    ],
-                    check=False,
-                )
-                subprocess.run(
-                    [
-                        qdbus,
-                        "org.kde.KWin",
-                        "/Scripting",
-                        "org.kde.kwin.Scripting.loadScript",
-                        str(mainJs),
-                        "winmiddle-focus",
-                    ],
-                    check=False,
-                )
-                break
-        subprocess.run(
-            [qdbus, "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.start"],
-            check=False,
-        )
-    log.info("KWin script winmiddle-focus enabled")
-    return True
+
+    qdbus = _qdbusBin()
+    if not qdbus:
+        log.warning("qdbus6 missing — winmiddle-focusEnabled written; restart Plasma to load it")
+        return False
+
+    # Plugins=*Enabled + reconfigure is enough when metadata has KPackageStructure.
+    subprocess.run([qdbus, "org.kde.KWin", "/KWin", "reconfigure"], check=False)
+
+    loaded = isKwinScriptLoaded()
+    if loaded:
+        log.info("KWin script winmiddle-focus already loaded")
+        return True
+
+    # Explicit load helps when reconfigure races session startup.
+    mainJs = kwinScriptMainJs()
+    assert mainJs is not None
+    subprocess.run(
+        [qdbus, "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.unloadScript", "winmiddle-focus"],
+        check=False,
+        capture_output=True,
+    )
+    load = subprocess.run(
+        [
+            qdbus,
+            "org.kde.KWin",
+            "/Scripting",
+            "org.kde.kwin.Scripting.loadScript",
+            str(mainJs),
+            "winmiddle-focus",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        [qdbus, "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.start"],
+        check=False,
+        capture_output=True,
+    )
+
+    loaded = isKwinScriptLoaded()
+    if loaded:
+        log.info("KWin script winmiddle-focus loaded from %s", mainJs)
+        return True
+
+    log.warning(
+        "KWin script winmiddle-focus not loaded (load=%s out=%s). "
+        "Check metadata KPackageStructure and System Settings → KWin Scripts.",
+        load.returncode,
+        (load.stdout or load.stderr or "").strip() or "(empty)",
+    )
+    return False
 
 
 def mouseUdevRuleText() -> str:

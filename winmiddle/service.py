@@ -78,30 +78,47 @@ def queryServiceStatus() -> ServiceStatus:
 def startService() -> tuple[bool, str]:
     proc = _systemctl("start", SERVICE_NAME)
     ok = proc.returncode == 0
-    return ok, (proc.stderr or proc.stdout or ("started" if ok else "start failed")).strip()
+    return ok, _resultMessage(proc, okFallback="Daemon started", failFallback="Start failed")
 
 
 def stopService() -> tuple[bool, str]:
     proc = _systemctl("stop", SERVICE_NAME)
     ok = proc.returncode == 0
-    return ok, (proc.stderr or proc.stdout or ("stopped" if ok else "stop failed")).strip()
+    return ok, _resultMessage(proc, okFallback="Daemon stopped", failFallback="Stop failed")
 
 
 def restartService() -> tuple[bool, str]:
     proc = _systemctl("restart", SERVICE_NAME)
     ok = proc.returncode == 0
-    return ok, (proc.stderr or proc.stdout or ("restarted" if ok else "restart failed")).strip()
+    return ok, _resultMessage(proc, okFallback="Daemon restarted", failFallback="Restart failed")
 
 
 def enableService(*, now: bool = True) -> tuple[bool, str]:
     args = ["enable", "--now", SERVICE_NAME] if now else ["enable", SERVICE_NAME]
     proc = _systemctl(*args)
     ok = proc.returncode == 0
-    return ok, (proc.stderr or proc.stdout or ("enabled" if ok else "enable failed")).strip()
+    return ok, _resultMessage(proc, okFallback="Enabled at login", failFallback="Enable failed")
 
 
 def disableService(*, now: bool = True) -> tuple[bool, str]:
     args = ["disable", "--now", SERVICE_NAME] if now else ["disable", SERVICE_NAME]
     proc = _systemctl(*args)
     ok = proc.returncode == 0
-    return ok, (proc.stderr or proc.stdout or ("disabled" if ok else "disable failed")).strip()
+    return ok, _resultMessage(proc, okFallback="Disabled at login", failFallback="Disable failed")
+
+
+def _resultMessage(
+    proc: subprocess.CompletedProcess[str],
+    *,
+    okFallback: str,
+    failFallback: str,
+) -> str:
+    raw = (proc.stderr or proc.stdout or "").strip()
+    if proc.returncode == 0:
+        # systemctl often prints long "Created symlink …" noise on success.
+        if not raw or "Created symlink" in raw or "Removed" in raw:
+            return okFallback
+        return raw.splitlines()[0]
+    if raw:
+        return raw.splitlines()[0]
+    return failFallback

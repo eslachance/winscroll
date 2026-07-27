@@ -382,13 +382,14 @@ class SettingsWindow(QMainWindow):
         return page
 
     def _buildFooter(self) -> QWidget:
-        row = QWidget()
-        layout = QHBoxLayout(row)
+        footer = QWidget()
+        layout = QVBoxLayout(footer)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
 
-        self.messageLabel = QLabel("")
-        self.messageLabel.setStyleSheet("color: palette(mid);")
-        self.messageLabel.setWordWrap(True)
+        buttonRow = QHBoxLayout()
+        buttonRow.setContentsMargins(0, 0, 0, 0)
+        buttonRow.addStretch(1)
 
         defaultsBtn = QPushButton("Defaults")
         reloadBtn = QPushButton("Reload")
@@ -401,12 +402,20 @@ class SettingsWindow(QMainWindow):
         applyBtn.clicked.connect(lambda: self.applyConfig(restart=False))
         applyRestartBtn.clicked.connect(lambda: self.applyConfig(restart=True))
 
-        layout.addWidget(self.messageLabel, stretch=1)
-        layout.addWidget(defaultsBtn)
-        layout.addWidget(reloadBtn)
-        layout.addWidget(applyBtn)
-        layout.addWidget(applyRestartBtn)
-        return row
+        buttonRow.addWidget(defaultsBtn)
+        buttonRow.addWidget(reloadBtn)
+        buttonRow.addWidget(applyBtn)
+        buttonRow.addWidget(applyRestartBtn)
+        layout.addLayout(buttonRow)
+
+        self.messageLabel = QLabel("")
+        self.messageLabel.setStyleSheet("color: palette(mid);")
+        self.messageLabel.setWordWrap(True)
+        self.messageLabel.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        layout.addWidget(self.messageLabel)
+        return footer
 
     # ── Data ─────────────────────────────────────────────────────────
 

@@ -11,10 +11,10 @@
             }
         ],
         "Id": "winmiddle-focus",
-        "Version": "0.2.0",
-        "License": "MIT",
-        "ServiceTypes": ["KWin/Script"]
+        "Version": "0.2.1",
+        "License": "MIT"
     },
     "X-Plasma-API": "javascript",
-    "X-Plasma-MainScript": "code/main.js"
+    "X-Plasma-MainScript": "code/main.js",
+    "X-Plasma-API-Minimum-Version": "6.0"
 }

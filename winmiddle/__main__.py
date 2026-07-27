@@ -18,7 +18,7 @@ from winmiddle.daemon import MiddleDaemon
 from winmiddle.devices import listPointerDevices
 from winmiddle.focus import FocusHub, registerFocusHub
 from winmiddle.scrollprobe import ScrollProbe
-from winmiddle.setuputil import ensureConfig, runSetup
+from winmiddle.setuputil import enableKwinScript, ensureConfig, isKwinScriptLoaded, runSetup
 
 
 def buildParser() -> argparse.ArgumentParser:
@@ -104,6 +104,20 @@ def main(argv: list[str] | None = None) -> int:
 
     focusHub = FocusHub()
     registerFocusHub(focusHub)
+
+    # AUR/package install only drops files; without Plugins/*Enabled KWin never
+    # loads winmiddle-focus → cursor stays (0,0) and require_scrollable blocks.
+    # Retry a few times: graphical-session can start us before KWin is ready.
+    def ensureFocusScript() -> None:
+        if isKwinScriptLoaded():
+            return
+        if focusHub.hasRecentUpdate():
+            return
+        enableKwinScript()
+
+    ensureFocusScript()
+    for delayMs in (1500, 4000, 10000):
+        QTimer.singleShot(delayMs, ensureFocusScript)
 
     # Keep availableGeometry fresh for panel-edge pointer clamp during autoscroll.
     workAreaTimer = QTimer()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import dataclass
 
 from PyQt6.QtCore import QObject, pyqtSlot
@@ -45,6 +46,7 @@ class FocusHub(QObject):
         super().__init__()
         self._lock = threading.Lock()
         self._state = FocusState()
+        self._lastUpdateMono = 0.0
 
     def snapshot(self) -> FocusState:
         with self._lock:
@@ -56,10 +58,30 @@ class FocusHub(QObject):
                 workArea=self._state.workArea,
             )
 
-    def refreshWorkArea(self) -> None:
-        """Periodic Qt-thread refresh so panel clamp works even if focus script lags."""
+    def hasRecentUpdate(self, maxAgeSec: float = 2.0) -> bool:
         with self._lock:
+            if self._lastUpdateMono <= 0.0:
+                return False
+            return (time.monotonic() - self._lastUpdateMono) <= maxAgeSec
+
+    def refreshWorkArea(self) -> None:
+        """Periodic Qt-thread refresh so panel clamp works even if focus script lags.
+
+        Also seeds cursor from QCursor when the KWin script has never reported
+        (avoids scroll probes stuck at 0,0 after a reboot with the script off).
+        """
+        from PyQt6.QtGui import QCursor
+
+        with self._lock:
+            stale = self._lastUpdateMono <= 0.0
             cx, cy = self._state.cursorX, self._state.cursorY
+        if stale:
+            pos = QCursor.pos()
+            cx, cy = pos.x(), pos.y()
+            with self._lock:
+                if self._lastUpdateMono <= 0.0:
+                    self._state.cursorX = cx
+                    self._state.cursorY = cy
         wa = _workAreaAt(cx, cy)
         if wa is None:
             return
@@ -70,6 +92,7 @@ class FocusHub(QObject):
     def Update(self, resourceClass: str, resourceName: str, cursorX: int, cursorY: int) -> None:
         wa = _workAreaAt(int(cursorX), int(cursorY))
         with self._lock:
+            self._lastUpdateMono = time.monotonic()
             self._state = FocusState(
                 resourceClass=(resourceClass or "").lower(),
                 resourceName=(resourceName or "").lower(),
