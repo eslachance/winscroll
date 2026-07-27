@@ -82,6 +82,8 @@ class Config:
     # Noisy middle-click mice (e.g. Logitech M720) emit accidental wheel ticks.
     exitOnWheel: bool = False
     wheelGraceMs: float = 450.0
+    # Browsers: with hold, tap = real middle-click and hold = winmiddle scroll.
+    # Toggle-only (hold off) still full-passthrough so browser native autoscroll runs.
     nativeMiddleApps: list[str] = field(
         default_factory=lambda: [
             "firefox",
@@ -352,8 +354,11 @@ wheel_grace_ms = 450
 
 [apps]
 # Extra gate: only start autoscroll when AT-SPI says the target looks scrollable.
+# Skipped for native_middle apps (browser a11y is flaky after tab switches).
 require_scrollable = true
 
+# Browsers: with hold=true, tap = real middle-click (tabs/links), hold = scroll.
+# With hold=false (toggle-only), full middle passthrough (use browser native autoscroll).
 native_middle = [
   "firefox", "google-chrome", "chromium", "brave", "vivaldi",
   "msedge", "librewolf", "floorp", "zen", "navigator",

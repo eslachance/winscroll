@@ -1,4 +1,5 @@
 {
+    "KPackageStructure": "KWin/Script",
     "KPlugin": {
         "Name": "winmiddle focus",
         "Description": "Reports active window class and cursor position to winmiddle",
@@ -10,7 +11,7 @@
             }
         ],
         "Id": "winmiddle-focus",
-        "Version": "0.1.0",
+        "Version": "0.2.0",
         "License": "MIT",
         "ServiceTypes": ["KWin/Script"]
     },

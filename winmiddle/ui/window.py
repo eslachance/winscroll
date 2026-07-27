@@ -304,7 +304,12 @@ class SettingsWindow(QMainWindow):
         )
         layout.addWidget(self.requireScrollableCheck)
 
-        layout.addWidget(QLabel("Native middle-click apps (full passthrough — browsers, etc.)"))
+        layout.addWidget(
+            QLabel(
+                "Native middle-click apps (browsers: tap = real middle-click; "
+                "hold+move = winmiddle scroll. Toggle-only → full passthrough.)"
+            )
+        )
         self.nativeList = AppListEditor()
         layout.addWidget(self.nativeList)
 

@@ -21,7 +21,7 @@ from winmiddle.devices import (
     pickPointerDevice,
     syn,
 )
-from winmiddle.focus import FocusHub, matchesAny
+from winmiddle.focus import FocusHub, FocusState, matchesAny
 from winmiddle.modifiers import ModifierTracker
 
 if TYPE_CHECKING:
@@ -32,6 +32,33 @@ if TYPE_CHECKING:
     from winmiddle.scrollprobe import ScrollProbe
 
 log = logging.getLogger("winmiddle.daemon")
+
+
+def shouldPassthroughMiddle(
+    focus: FocusState,
+    *,
+    passthroughApps: list[str],
+    nativeMiddleApps: list[str],
+    holdScroll: bool,
+) -> bool:
+    """Whether middle-down should be forwarded untouched.
+
+    Games/tools on ``passthrough`` always win. Browser-style ``native_middle``
+    apps only get full passthrough when hold mode is off (toggle-only): with
+    hold enabled, tap stays a real middle-click (close tab / open link) and
+    hold+move uses winmiddle scroll — more reliable than Chromium's Wayland
+    native autoscroll, which often dies after tab switches.
+    """
+    if matchesAny(focus, passthroughApps):
+        return True
+    if matchesAny(focus, nativeMiddleApps) and not holdScroll:
+        return True
+    return False
+
+
+def skipScrollableProbe(focus: FocusState, nativeMiddleApps: list[str]) -> bool:
+    """Browsers: skip AT-SPI — Chromium's tree often goes stale after tab switches."""
+    return matchesAny(focus, nativeMiddleApps)
 
 
 class MiddleDaemon:
@@ -82,12 +109,12 @@ class MiddleDaemon:
         )
 
     def _shouldPassthroughMiddle(self) -> bool:
-        focus = self.focusHub.snapshot()
-        if matchesAny(focus, self.config.passthroughApps):
-            return True
-        if matchesAny(focus, self.config.nativeMiddleApps):
-            return True
-        return False
+        return shouldPassthroughMiddle(
+            self.focusHub.snapshot(),
+            passthroughApps=self.config.passthroughApps,
+            nativeMiddleApps=self.config.nativeMiddleApps,
+            holdScroll=self.config.holdScroll,
+        )
 
     def _modifierHeld(self) -> bool:
         if self.modifiers is None:
@@ -115,11 +142,16 @@ class MiddleDaemon:
 
     def _scrollTargetAllowsAutoscroll(self) -> bool:
         """True only when we should enter PENDING_MIDDLE / autoscroll."""
+        focus = self.focusHub.snapshot()
+        # native_middle + hold: tap already synthesizes a real middle-click, so
+        # we do not need AT-SPI to protect tabs/links — and Chromium a11y often
+        # returns unknown/no right after a tab switch (janky "scroll died").
+        if skipScrollableProbe(focus, self.config.nativeMiddleApps):
+            return True
         if not self.config.requireScrollable:
             return True
         if self.scrollProbe is None:
             return False
-        focus = self.focusHub.snapshot()
         verdict = self.scrollProbe.probe(focus.cursorX, focus.cursorY)
         log.info(
             "scroll probe at (%s,%s) focus=%s → %s",
