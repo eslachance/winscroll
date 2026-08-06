@@ -12,13 +12,13 @@ from evdev import InputEvent, ecodes
 from winmiddle.activation import gestureAllowed
 from winmiddle.autoscroll import Mode, shouldStartDrag, windowsScrollSpeed
 from winmiddle.devices import (
+    DeviceLostError,
+    PointerBank,
     createVirtualMouse,
     forwardEvent,
-    grabDevice,
     injectButton,
     injectRelative,
-    iterDeviceEventsWithExtras,
-    pickPointerDevice,
+    iterPointerBankEvents,
     syn,
 )
 from winmiddle.focus import FocusHub, FocusState, matchesAny
@@ -467,20 +467,48 @@ class MiddleDaemon:
             forwardEvent(ui, event)
             syn(ui)
 
+    def _resetInputState(self) -> None:
+        """Clear gesture/scroll state after a device drop so we re-enter IDLE cleanly."""
+        self._leaveAutoscroll()
+        self.mode = Mode.IDLE
+        self._pendingDx = 0.0
+        self._pendingDy = 0.0
+        self._pendingStartTs = 0.0
+        self._pendingHoldOk = False
+        self._pendingToggleOk = False
+        self._wheelAccumX = 0.0
+        self._wheelAccumY = 0.0
+
+    def _runInputLoop(self, bank: PointerBank, ui: UInput) -> None:
+        """Process events until stop or every physical pointer disappears."""
+        extraFds = self.modifiers.fds if self.modifiers else []
+        for batch, readyExtras in iterPointerBankEvents(
+            bank,
+            extraFds,
+            timeoutSec=1.0 / max(1.0, self.config.scrollHz),
+        ):
+            if self._stop.is_set():
+                break
+
+            if self.modifiers and readyExtras:
+                for fd in readyExtras:
+                    device = self.modifiers.deviceForFd(fd)
+                    if device is not None:
+                        self.modifiers.drain(device)
+
+            passthroughMiddle = self._shouldPassthroughMiddle()
+
+            # If focus switches into a passthrough app mid-pending, flush middle-down.
+            if passthroughMiddle and self.mode == Mode.PENDING_MIDDLE:
+                self._beginMiddleDrag(ui)
+
+            if self.mode in (Mode.AUTOSCROLL, Mode.HOLD_AUTOSCROLL):
+                self._flushScroll(ui)
+
+            for event in batch:
+                self._handleEvent(ui, event, passthroughMiddle)
+
     def run(self) -> None:
-        pointer = pickPointerDevice(
-            preferredPath=self.config.devicePath,
-            vendor=self.config.deviceVendor,
-            product=self.config.deviceProduct,
-        )
-        self.pointer = pointer
-        log.info(
-            "Using pointer %s (%s) vid=%04x pid=%04x",
-            pointer.path,
-            pointer.name,
-            pointer.vendor,
-            pointer.product,
-        )
         log.info(
             "activation hold=%s toggle=%s modifier=%s modifier_for=%s",
             self.config.holdScroll,
@@ -508,45 +536,43 @@ class MiddleDaemon:
             log.warning("modifier tracker unavailable: %s", error)
             self.modifiers = None
 
-        if self.config.grabDevice:
-            grabDevice(pointer.device)
-            log.info("Grabbed physical device (compositor only sees winmiddle virtual mouse)")
+        bank = PointerBank(
+            preferredPath=self.config.devicePath,
+            vendor=self.config.deviceVendor,
+            product=self.config.deviceProduct,
+            grab=self.config.grabDevice,
+            rescanSec=1.0,
+        )
+        self.pointer = None
 
-        extraFds = self.modifiers.fds if self.modifiers else []
         try:
-            for batch, readyExtras in iterDeviceEventsWithExtras(
-                pointer.device,
-                extraFds,
-                timeoutSec=1.0 / max(1.0, self.config.scrollHz),
-            ):
-                if self._stop.is_set():
+            while not self._stop.is_set():
+                if not bank.waitUntilReady(stopEvent=self._stop):
                     break
-
-                if self.modifiers and readyExtras:
-                    for fd in readyExtras:
-                        device = self.modifiers.deviceForFd(fd)
-                        if device is not None:
-                            self.modifiers.drain(device)
-
-                passthroughMiddle = self._shouldPassthroughMiddle()
-
-                # If focus switches into a passthrough app mid-pending, flush middle-down.
-                if passthroughMiddle and self.mode == Mode.PENDING_MIDDLE:
-                    self._beginMiddleDrag(ui)
-
-                if self.mode in (Mode.AUTOSCROLL, Mode.HOLD_AUTOSCROLL):
-                    self._flushScroll(ui)
-
-                for event in batch:
-                    self._handleEvent(ui, event, passthroughMiddle)
+                log.info(
+                    "watching %d pointer device(s)%s",
+                    len(bank),
+                    " (grabbed)" if self.config.grabDevice else "",
+                )
+                try:
+                    self._runInputLoop(bank, ui)
+                except DeviceLostError as error:
+                    log.warning(
+                        "all pointer devices lost (%s) — waiting for reconnect",
+                        error,
+                    )
+                    self._resetInputState()
+                    bank.closeAll()
+                    continue
+                # Clean stop or loop break from _stop.
+                break
         finally:
             self._leaveAutoscroll()
             if self.modifiers:
                 self.modifiers.close()
                 self.modifiers = None
-            try:
-                pointer.device.ungrab()
-            except Exception:
-                pass
+            bank.closeAll()
+            self.pointer = None
             ui.close()
+            self.ui = None
             log.info("Daemon stopped")

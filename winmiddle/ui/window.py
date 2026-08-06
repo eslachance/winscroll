@@ -339,9 +339,10 @@ class SettingsWindow(QMainWindow):
         layout.addLayout(form)
 
         note = QLabel(
-            "Auto picks the first accessible middle-button pointer. Devices marked "
-            "no access need the mouse udev rule (Setup tab) or an input-group re-login. "
-            "Pin a device if you have more than one mouse."
+            "Auto watches every accessible middle-button mouse (and picks up "
+            "hotplug / 2.4G↔BT↔USB mode switches). Pin a device to limit to that "
+            "mouse and same-name siblings. Devices marked no access need the mouse "
+            "udev rule (Setup tab) or an input-group re-login."
         )
         note.setWordWrap(True)
         note.setStyleSheet("color: palette(mid);")
