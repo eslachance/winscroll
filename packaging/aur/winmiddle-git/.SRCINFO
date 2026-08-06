@@ -1,8 +1,8 @@
 pkgbase = winmiddle-git
 	pkgdesc = Windows-faithful middle-click autoscroll for Linux (Plasma/Wayland) — git
-	pkgver = 0.2.1.r0.g6ab9a9a
+	pkgver = 0.2.2.r0.gbbb04e4
 	pkgrel = 1
-	url = https://github.com/eslachance/winscroll
+	url = https://github.com/eslachance/winmiddle
 	arch = any
 	license = MIT
 	makedepends = git
@@ -20,7 +20,7 @@ pkgbase = winmiddle-git
 	provides = winmiddle
 	conflicts = winmiddle
 	install = winmiddle.install
-	source = git+https://github.com/eslachance/winscroll.git
+	source = git+https://github.com/eslachance/winmiddle.git
 	sha256sums = SKIP
 
 pkgname = winmiddle-git
